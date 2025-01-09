@@ -28,10 +28,12 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+ 
 
 class MyHome extends StatelessWidget {
   const MyHome({super.key});
 
+ 
   Widget _buildItem(
       BuildContext context, String label, IconData icon, Widget page) {
     return Container(
@@ -116,6 +118,7 @@ class MyHome extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
+            // Ajoute les boutons pour scanner un QR code ou consulter la liste des députés
             _buildItem(
               context,
               'Scanner le QR code d\'un député',

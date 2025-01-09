@@ -1,22 +1,31 @@
+// Importation des packages nécessaires
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:csv/csv.dart';
 import 'package:flutter_hackathon/database_helpers.dart';
 
+// Instance du gestionnaire de base de données
 final dbHelper = DatabaseHelper();
+
+// Variable pour mettre en cache les données des députés
 List<Map<String, String>>? _cachedDeputesData;
 
+// Fonction pour charger les données des députés depuis un fichier CSV
 Future<List<Map<String, String>>> loadDeputesData() async {
+  // Si les données sont déjà en cache, les retourner directement
   if (_cachedDeputesData != null) {
     return _cachedDeputesData!;
   }
 
   try {
+    
     final data = await rootBundle.loadString('assets/data_deputes.csv');
     final List<List<dynamic>> csvTable = CsvToListConverter().convert(data);
 
+  
     if (csvTable.isEmpty) return [];
 
+    // Extraction des en-têtes et des données
     final headers = csvTable.first.map((header) => header.toString()).toList();
     _cachedDeputesData = csvTable.skip(1).map((row) {
       return Map<String, String>.fromIterables(headers, row.map((e) => e.toString()));
@@ -24,11 +33,12 @@ Future<List<Map<String, String>>> loadDeputesData() async {
 
     return _cachedDeputesData!;
   } catch (e) {
-    // Gestion des erreurs (par exemple, log ou affichage à l'utilisateur)
+    
     return [];
   }
 }
 
+// Classe principale pour afficher la liste des députés
 class DeputesPage extends StatefulWidget {
   const DeputesPage({super.key});
 
@@ -37,15 +47,15 @@ class DeputesPage extends StatefulWidget {
 }
 
 class _DeputesPageState extends State<DeputesPage> {
-  List<Map<String, String>> _deputes = [];
-  List<Map<String, String>> _filteredDeputes = [];
-  TextEditingController _searchController = TextEditingController();
+  List<Map<String, String>> _deputes = []; // Liste complète des députés
+  List<Map<String, String>> _filteredDeputes = []; // Liste filtrée selon la recherche
+  TextEditingController _searchController = TextEditingController(); // Contrôleur pour le champ de recherche
 
   @override
   void initState() {
     super.initState();
-    _loadDeputesData();
-    _searchController.addListener(_filterDeputes);
+    _loadDeputesData(); // Charger les données des députés
+    _searchController.addListener(_filterDeputes); // Écoute les modifications du champ de recherche
   }
 
   @override
@@ -54,6 +64,7 @@ class _DeputesPageState extends State<DeputesPage> {
     super.dispose();
   }
 
+  // Charger les données des députés 
   Future<void> _loadDeputesData() async {
     final deputies = await loadDeputesData();
     setState(() {
@@ -62,6 +73,7 @@ class _DeputesPageState extends State<DeputesPage> {
     });
   }
 
+  // Filtre les députés en fonction de la saisie de l'utilisateur
   void _filterDeputes() {
     final query = _searchController.text.toLowerCase();
     setState(() {
@@ -95,7 +107,7 @@ class _DeputesPageState extends State<DeputesPage> {
         ),
       ),
       body: _deputes.isEmpty
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator()) 
           : ListView.builder(
               itemCount: _filteredDeputes.length,
               itemBuilder: (context, index) {
@@ -112,6 +124,7 @@ class _DeputesPageState extends State<DeputesPage> {
                     subtitle: Text('${depute['Région']}, ${depute['Département']}'),
                     trailing: Text(depute['Groupe politique (abrégé)'] ?? ''),
                     onTap: () async {
+                      // Charge l'historique d'entrée pour le député et ouvre une page détaillée
                       List<Map<String, dynamic>> entries = await 
                       dbHelper.getEntriesForDepute('${depute['Nom']} ${depute['Prénom']}');
                       Navigator.push(
@@ -132,9 +145,10 @@ class _DeputesPageState extends State<DeputesPage> {
   }
 }
 
+// Page détaillée pour un député spécifique
 class DeputePage extends StatelessWidget {
-  final Map<String, String> depute;
-  final List<Map<String, dynamic>> entries;
+  final Map<String, String> depute; // Informations sur le député
+  final List<Map<String, dynamic>> entries; // Historique des entrées du député
 
   const DeputePage({super.key, required this.depute, required this.entries});
 
@@ -190,7 +204,7 @@ class DeputePage extends StatelessWidget {
                       subtitle: Text(entry['entry_time']),
                       trailing: const Icon(Icons.arrow_forward),
                       onTap: () {
-                        // Action à effectuer lors du tap sur une entrée
+                        
                       },
                     ),
                   );
