@@ -5,6 +5,7 @@ import 'package:flutter_hackathon/scanner_button_widgets.dart';
 import 'package:flutter_hackathon/scanner_error_widget.dart';
 import 'package:flutter_hackathon/deputes_page.dart';
 import 'package:flutter_hackathon/database_helpers.dart';
+import 'package:flutter_hackathon/app_bar.dart';
 
 final dbHelper = DatabaseHelper();
 
@@ -57,10 +58,8 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> {
     );
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('Scanner with Overlay Example app'),
-      ),
+      backgroundColor: const Color.fromARGB(255, 153, 148, 148),
+      appBar: const CustomAppBar(title: 'Scannnez un QR code'),
       body: Stack(
         fit: StackFit.expand,
         children: [

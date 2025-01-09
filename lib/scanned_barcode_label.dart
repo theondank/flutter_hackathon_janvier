@@ -18,7 +18,7 @@ class ScannedBarcodeLabel extends StatelessWidget {
 
         if (scannedBarcodes.isEmpty) {
           return const Text(
-            'Scan something!',
+            'Scannez un QR code',
             overflow: TextOverflow.fade,
             style: TextStyle(color: Colors.white),
           );

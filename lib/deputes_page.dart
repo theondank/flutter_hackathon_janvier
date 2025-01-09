@@ -38,17 +38,37 @@ class DeputesPage extends StatefulWidget {
 
 class _DeputesPageState extends State<DeputesPage> {
   List<Map<String, String>> _deputes = [];
+  List<Map<String, String>> _filteredDeputes = [];
+  TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadDeputesData();
+    _searchController.addListener(_filterDeputes);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_filterDeputes);
+    super.dispose();
   }
 
   Future<void> _loadDeputesData() async {
     final deputies = await loadDeputesData();
     setState(() {
       _deputes = deputies;
+      _filteredDeputes = deputies;
+    });
+  }
+
+  void _filterDeputes() {
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      _filteredDeputes = _deputes.where((depute) {
+        final name = '${depute['Nom']} ${depute['Prénom']}'.toLowerCase();
+        return name.contains(query);
+      }).toList();
     });
   }
 
@@ -57,14 +77,30 @@ class _DeputesPageState extends State<DeputesPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Liste des Députés'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48.0),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                hintText: 'Rechercher...',
+                border: InputBorder.none,
+                filled: true,
+                fillColor: Colors.white,
+                prefixIcon: Icon(Icons.search),
+              ),
+            ),
+          ),
+        ),
       ),
       body: _deputes.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : ListView.builder(
-              itemCount: _deputes.length,
+              itemCount: _filteredDeputes.length,
               itemBuilder: (context, index) {
-                final depute = _deputes[index];
-                 String imageUrl =
+                final depute = _filteredDeputes[index];
+                String imageUrl =
                     'https://datan.fr/assets/imgs/deputes_webp/depute_${depute['identifiant']}_webp.webp';
                 return Card(
                   margin: const EdgeInsets.symmetric(
@@ -73,8 +109,8 @@ class _DeputesPageState extends State<DeputesPage> {
                     leading: Image.network(imageUrl,
                         width: 50, height: 50, fit: BoxFit.cover),
                     title: Text('${depute['Nom']} ${depute['Prénom']}'),
-                    subtitle: Text('${depute['Région']}, ${depute['Circonscription']}'),
-                    trailing: Text(depute['Groupe abrégé'] ?? ''),
+                    subtitle: Text('${depute['Région']}, ${depute['Département']}'),
+                    trailing: Text(depute['Groupe politique (abrégé)'] ?? ''),
                     onTap: () async {
                       List<Map<String, dynamic>> entries = await 
                       dbHelper.getEntriesForDepute('${depute['Nom']} ${depute['Prénom']}');
@@ -123,9 +159,9 @@ class DeputePage extends StatelessWidget {
             Text('Nom: ${depute['Nom']} ${depute['Prénom']}',
                 style: const TextStyle(fontSize: 18)),
             Text('Région: ${depute['Région']}', style: const TextStyle(fontSize: 18)),
-            Text('Circonscription: ${depute['Circonscription']}',
+            Text('Circonscription: ${depute['Département']}',
                 style: const TextStyle(fontSize: 18)),
-            Text('Groupe politique (abrégé): ${depute['Groupe abrégé']}',
+            Text('Groupe politique (abrégé): ${depute['Groupe politique (abrégé)']}',
                 style: const TextStyle(fontSize: 18)),
             const SizedBox(height: 16.0),
             const Text(
@@ -152,7 +188,7 @@ class DeputePage extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(entry['entry_time']),
-                      trailing: const Icon(Icons.arrow_forward_ios),
+                      trailing: const Icon(Icons.arrow_forward),
                       onTap: () {
                         // Action à effectuer lors du tap sur une entrée
                       },
