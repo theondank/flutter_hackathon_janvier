@@ -4,66 +4,16 @@ import 'package:flutter_hackathon/scanned_barcode_label.dart';
 import 'package:flutter_hackathon/scanner_button_widgets.dart';
 import 'package:flutter_hackathon/scanner_error_widget.dart';
 import 'package:flutter_hackathon/deputes_page.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:flutter_hackathon/database_helpers.dart';
 
-Future<Database> initializeDatabase() async {
-  // Obtenez le chemin par défaut des bases de données sur l'appareil
-  final databasesPath = await getDatabasesPath();
-  final path = join(databasesPath, 'hemicycle.db');
+final dbHelper = DatabaseHelper();
 
-  // Ouvrez la base de données et créez la table si nécessaire
-  return await openDatabase(
-    path,
-    version: 1,
-    onCreate: (db, version) async {
-      await db.execute('''
-        CREATE TABLE entries (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          deputy_name TEXT NOT NULL,
-          entry_time TEXT NOT NULL
-        )
-      ''');
-    },
-  );
+bool verifyDeputyData(Map<String, String> vCardData, Map<String, String> depute) {
+  String fullName1 = '${depute['Nom']} ${depute['Prénom']}';
+  String fullName2 = '${depute['Prénom']} ${depute['Nom']}';
+  return vCardData['Nom complet'] == fullName1 || vCardData['Nom complet'] == fullName2;
 }
 
-Future<void> insertEntry(String deputyName) async {
-  // Initialisez la base de données
-  final db = await initializeDatabase();
-
-  // Obtenez l'heure actuelle au format ISO 8601
-  final entryTime = DateTime.now().toIso8601String();
-
-  // Insérez les données dans la table
-  await db.insert(
-    'entries',
-    {
-      'deputy_name': deputyName,
-      'entry_time': entryTime,
-    },
-    conflictAlgorithm: ConflictAlgorithm.replace,
-  );
-}
-
-Future<List<Map<String, dynamic>>> getEntries() async {
-  // Initialisez la base de données
-  final db = await initializeDatabase();
-
-  // Récupérez toutes les entrées de la table
-  return await db.query('entries', orderBy: 'entry_time DESC');
-}
-
-Future<bool> verifyDeputyData(
-    Map<String, String> vCardData, List<Map<String, String>> deputies) async {
-  for (final deputy in deputies) {
-    if (vCardData['Nom complet'] == '${deputy['Nom']} ${deputy['Prénom']}') {
-      // Vous pouvez ajouter d'autres comparaisons ici (Email, Téléphone, etc.)
-      return true;
-    }
-  }
-  return false;
-}
 
 // Fonction pour analyser une vCard
 Map<String, String> parseVCard(String vCard) {
@@ -126,29 +76,27 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> {
                 final List<Barcode> barcodes = capture.barcodes;
                 for (final barcode in barcodes) {
                   final String? rawValue = barcode.rawValue;
-                  print('QR Code scanné: $rawValue');
+                 
                   if (isVCard(rawValue)) {
                     final vCardData = parseVCard(rawValue!);
-                    print('Données vCard: $vCardData');
+                    
                     final deputies = await loadDeputesData();
-                    print('Premier député dans la liste: ${deputies.first}');
+                   
 
                     // Vérifiez si le QR code correspond à un député
                     for (final depute in deputies) {
-                      print('Comparaison:');
-                      print('vCard nom: ${vCardData['Nom complet']}');
-                      print('Député nom: ${depute['Nom']} ${depute['Prénom']}');
+                      String nomComplet = '${depute['Nom']} ${depute['Prénom']}';
+                      if (verifyDeputyData(vCardData, depute)) {
 
-                      if (vCardData['Nom complet'] ==
-                          '${depute['Nom']} ${depute['Prénom']}' || vCardData['Nom complet'] == '${depute['Prénom']} ${depute['Nom']}') {
-                        print('Correspondance trouvée!');
-                        await insertEntry('${depute['Nom']} ${depute['Prénom']}');
+                        await dbHelper.insertEntry(nomComplet);
                         await controller.stop();
+                        List<Map<String, dynamic>> entries = await dbHelper.getEntriesForDepute('${depute['Nom']} ${depute['Prénom']}'!);
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) =>
-                                DeputePage(depute: depute.values.toList()),
+                                DeputePage(depute: depute,
+                                entries: entries,),
                           ),
                         );
                         return; // Arrête la méthode après une correspondance.

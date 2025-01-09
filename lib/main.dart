@@ -17,6 +17,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
       ),
       home: const MyHome(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -24,20 +25,20 @@ class MyApp extends StatelessWidget {
 class MyHome extends StatelessWidget {
   const MyHome({super.key});
 
-  Widget _buildItem(BuildContext context, String label, Widget page) {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Center(
-        child: ElevatedButton(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => page,
-              ),
-            );
-          },
-          child: Text(label),
-        ),
+  Widget _buildItem(
+      BuildContext context, String label, IconData icon, Widget page) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      child: ListTile(
+        leading: Icon(icon, color: Colors.blue),
+        title: Text(label),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => page,
+            ),
+          );
+        },
       ),
     );
   }
@@ -48,12 +49,17 @@ class MyHome extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Flutter Hackathon'),
       ),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _buildItem(context, 'Scanner QR Code', const BarcodeScannerWithOverlay()),
-          _buildItem(context, 'Liste des Députés', const DeputesPage()),
-        ],
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildItem(context, 'Scanner QR Code', Icons.qr_code_scanner,
+                const BarcodeScannerWithOverlay()),
+            _buildItem(
+                context, 'Liste des Députés', Icons.list, const DeputesPage()),
+          ],
+        ),
       ),
     );
   }

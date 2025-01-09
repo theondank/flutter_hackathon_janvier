@@ -1,35 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:csv/csv.dart';
+import 'package:flutter_hackathon/database_helpers.dart';
+
+final dbHelper = DatabaseHelper();
+List<Map<String, String>>? _cachedDeputesData;
 
 Future<List<Map<String, String>>> loadDeputesData() async {
-  final data = await rootBundle.loadString('assets/data_deputes.csv');
-  final List<List<dynamic>> csvTable = CsvToListConverter().convert(data);
-
-  final headers = csvTable[0].map((header) => header.toString()).toList();
-  final List<Map<String, String>> deputes = [];
-
-  for (var i = 1; i < csvTable.length; i++) {
-    final row = csvTable[i];
-    final Map<String, String> depute = {};
-    for (var j = 0; j < headers.length; j++) {
-      depute[headers[j]] = row[j].toString();
-    }
-    deputes.add(depute);
+  if (_cachedDeputesData != null) {
+    return _cachedDeputesData!;
   }
 
-  return deputes;
-}
+  try {
+    final data = await rootBundle.loadString('assets/data_deputes.csv');
+    final List<List<dynamic>> csvTable = CsvToListConverter().convert(data);
 
-Future<bool> verifyDeputyData(
-    Map<String, String> vCardData, List<Map<String, String>> deputies) async {
-  for (final deputy in deputies) {
-    if (vCardData['Nom complet'] == '${deputy['Nom']} ${deputy['Prénom']}') {
-      // Vous pouvez ajouter d'autres comparaisons ici (Email, Téléphone, etc.)
-      return true;
-    }
+    if (csvTable.isEmpty) return [];
+
+    final headers = csvTable.first.map((header) => header.toString()).toList();
+    _cachedDeputesData = csvTable.skip(1).map((row) {
+      return Map<String, String>.fromIterables(headers, row.map((e) => e.toString()));
+    }).toList();
+
+    return _cachedDeputesData!;
+  } catch (e) {
+    // Gestion des erreurs (par exemple, log ou affichage à l'utilisateur)
+    return [];
   }
-  return false;
 }
 
 class DeputesPage extends StatefulWidget {
@@ -40,19 +37,18 @@ class DeputesPage extends StatefulWidget {
 }
 
 class _DeputesPageState extends State<DeputesPage> {
-  List<List<dynamic>> _deputes = [];
+  List<Map<String, String>> _deputes = [];
 
   @override
   void initState() {
     super.initState();
-    _loadCSV();
+    _loadDeputesData();
   }
 
-  Future<void> _loadCSV() async {
-    final rawData = await rootBundle.loadString('assets/data_deputes.csv');
-    List<List<dynamic>> listData = const CsvToListConverter().convert(rawData);
+  Future<void> _loadDeputesData() async {
+    final deputies = await loadDeputesData();
     setState(() {
-      _deputes = listData;
+      _deputes = deputies;
     });
   }
 
@@ -68,23 +64,26 @@ class _DeputesPageState extends State<DeputesPage> {
               itemCount: _deputes.length,
               itemBuilder: (context, index) {
                 final depute = _deputes[index];
-                String imageUrl =
-                    'https://datan.fr/assets/imgs/deputes_webp/depute_${depute[0]}_webp.webp';
+                 String imageUrl =
+                    'https://datan.fr/assets/imgs/deputes_webp/depute_${depute['identifiant']}_webp.webp';
                 return Card(
                   margin: const EdgeInsets.symmetric(
                       vertical: 8.0, horizontal: 16.0),
                   child: ListTile(
                     leading: Image.network(imageUrl,
                         width: 50, height: 50, fit: BoxFit.cover),
-                    title: Text('${depute[1]} ${depute[2]}'),
-                    subtitle: Text('${depute[3]}, ${depute[4]}'),
-                    trailing: Text(depute[8]),
-                    onTap: () {
+                    title: Text('${depute['Nom']} ${depute['Prénom']}'),
+                    subtitle: Text('${depute['Région']}, ${depute['Circonscription']}'),
+                    trailing: Text(depute['Groupe abrégé'] ?? ''),
+                    onTap: () async {
+                      List<Map<String, dynamic>> entries = await 
+                      dbHelper.getEntriesForDepute('${depute['Nom']} ${depute['Prénom']}');
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => DeputePage(
                             depute: depute,
+                            entries: entries,
                           ),
                         ),
                       );
@@ -98,17 +97,18 @@ class _DeputesPageState extends State<DeputesPage> {
 }
 
 class DeputePage extends StatelessWidget {
-  final List<dynamic> depute;
+  final Map<String, String> depute;
+  final List<Map<String, dynamic>> entries;
 
-  const DeputePage({super.key, required this.depute});
+  const DeputePage({super.key, required this.depute, required this.entries});
 
   @override
   Widget build(BuildContext context) {
     String imageUrl =
-        'https://datan.fr/assets/imgs/deputes_webp/depute_${depute[0]}_webp.webp';
+        'https://datan.fr/assets/imgs/deputes_webp/depute_${depute['identifiant']}_webp.webp';
     return Scaffold(
       appBar: AppBar(
-        title: Text('${depute[1]} ${depute[2]}'),
+        title: Text('${depute['Nom']} ${depute['Prénom']}'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -120,13 +120,47 @@ class DeputePage extends StatelessWidget {
                   width: 100, height: 100, fit: BoxFit.cover),
             ),
             const SizedBox(height: 16.0),
-            Text('Nom: ${depute[1]} ${depute[2]}',
-                style: TextStyle(fontSize: 18)),
-            Text('Région: ${depute[3]}', style: TextStyle(fontSize: 18)),
-            Text('Circonscription: ${depute[4]}',
-                style: TextStyle(fontSize: 18)),
-            Text('Groupe politique (abrégé): ${depute[8]}',
-                style: TextStyle(fontSize: 18)),
+            Text('Nom: ${depute['Nom']} ${depute['Prénom']}',
+                style: const TextStyle(fontSize: 18)),
+            Text('Région: ${depute['Région']}', style: const TextStyle(fontSize: 18)),
+            Text('Circonscription: ${depute['Circonscription']}',
+                style: const TextStyle(fontSize: 18)),
+            Text('Groupe politique (abrégé): ${depute['Groupe abrégé']}',
+                style: const TextStyle(fontSize: 18)),
+            const SizedBox(height: 16.0),
+            const Text(
+              'Historique des entrées dans l\'hémicycle:',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: entries.length,
+                itemBuilder: (context, index) {
+                  var entry = entries[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.blue,
+                        child: Text(
+                          entry['deputy_name'][0],
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      title: Text(
+                        entry['deputy_name'],
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(entry['entry_time']),
+                      trailing: const Icon(Icons.arrow_forward_ios),
+                      onTap: () {
+                        // Action à effectuer lors du tap sur une entrée
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
