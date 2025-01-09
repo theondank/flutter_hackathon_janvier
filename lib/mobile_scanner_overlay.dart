@@ -4,6 +4,55 @@ import 'package:flutter_hackathon/scanned_barcode_label.dart';
 import 'package:flutter_hackathon/scanner_button_widgets.dart';
 import 'package:flutter_hackathon/scanner_error_widget.dart';
 import 'package:flutter_hackathon/deputes_page.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+
+Future<Database> initializeDatabase() async {
+  // Obtenez le chemin par défaut des bases de données sur l'appareil
+  final databasesPath = await getDatabasesPath();
+  final path = join(databasesPath, 'hemicycle.db');
+
+  // Ouvrez la base de données et créez la table si nécessaire
+  return await openDatabase(
+    path,
+    version: 1,
+    onCreate: (db, version) async {
+      await db.execute('''
+        CREATE TABLE entries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          deputy_name TEXT NOT NULL,
+          entry_time TEXT NOT NULL
+        )
+      ''');
+    },
+  );
+}
+
+Future<void> insertEntry(String deputyName) async {
+  // Initialisez la base de données
+  final db = await initializeDatabase();
+
+  // Obtenez l'heure actuelle au format ISO 8601
+  final entryTime = DateTime.now().toIso8601String();
+
+  // Insérez les données dans la table
+  await db.insert(
+    'entries',
+    {
+      'deputy_name': deputyName,
+      'entry_time': entryTime,
+    },
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+}
+
+Future<List<Map<String, dynamic>>> getEntries() async {
+  // Initialisez la base de données
+  final db = await initializeDatabase();
+
+  // Récupérez toutes les entrées de la table
+  return await db.query('entries', orderBy: 'entry_time DESC');
+}
 
 Future<bool> verifyDeputyData(
     Map<String, String> vCardData, List<Map<String, String>> deputies) async {
@@ -24,12 +73,9 @@ Map<String, String> parseVCard(String vCard) {
   for (final line in lines) {
     if (line.startsWith('FN:')) {
       data['Nom complet'] = line.substring(3).trim();
-    } else if (line.startsWith('EMAIL:')) {
-      data['Email'] = line.substring(6).trim();
-    } else if (line.startsWith('TEL:')) {
-      data['Téléphone'] = line.substring(4).trim();
     }
   }
+
   return data;
 }
 
@@ -80,51 +126,59 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> {
                 final List<Barcode> barcodes = capture.barcodes;
                 for (final barcode in barcodes) {
                   final String? rawValue = barcode.rawValue;
+                  print('QR Code scanné: $rawValue');
                   if (isVCard(rawValue)) {
+                    final vCardData = parseVCard(rawValue!);
+                    print('Données vCard: $vCardData');
                     final deputies = await loadDeputesData();
+                    print('Premier député dans la liste: ${deputies.first}');
 
                     // Vérifiez si le QR code correspond à un député
-                    bool found = false;
                     for (final depute in deputies) {
-                      
-                      if (rawValue != null) {
-                        found = true;
+                      print('Comparaison:');
+                      print('vCard nom: ${vCardData['Nom complet']}');
+                      print('Député nom: ${depute['Nom']} ${depute['Prénom']}');
+
+                      if (vCardData['Nom complet'] ==
+                          '${depute['Nom']} ${depute['Prénom']}' || vCardData['Nom complet'] == '${depute['Prénom']} ${depute['Nom']}') {
+                        print('Correspondance trouvée!');
+                        await insertEntry('${depute['Nom']} ${depute['Prénom']}');
+                        await controller.stop();
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) =>
-                                DeputePage(deputeData: depute),
+                                DeputePage(depute: depute.values.toList()),
                           ),
                         );
-                        break;
+                        return; // Arrête la méthode après une correspondance.
                       }
                     }
 
-                    if (!found) {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Non trouvé'),
-                          content: const Text(
-                              'Les informations du QR code ne correspondent à aucun député.'),
-                          actions: [
-                            TextButton(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                              },
-                              child: const Text('OK'),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
+// Si aucune correspondance n'est trouvée
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Non trouvé'),
+                        content: const Text(
+                            'Les informations du QR code ne correspondent à aucun député.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                            },
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    );
                   } else {
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
                         title: const Text('Erreur'),
                         content: const Text(
-                            'Le QR code scanné n\'est pas un vCard valide.'),
+                            'Le QR code scanné n\'est pas pris en charge, veuillez réessayer.'),
                         actions: [
                           TextButton(
                             onPressed: () {

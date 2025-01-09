@@ -68,10 +68,14 @@ class _DeputesPageState extends State<DeputesPage> {
               itemCount: _deputes.length,
               itemBuilder: (context, index) {
                 final depute = _deputes[index];
+                String imageUrl =
+                    'https://datan.fr/assets/imgs/deputes_webp/depute_${depute[0]}_webp.webp';
                 return Card(
                   margin: const EdgeInsets.symmetric(
                       vertical: 8.0, horizontal: 16.0),
                   child: ListTile(
+                    leading: Image.network(imageUrl,
+                        width: 50, height: 50, fit: BoxFit.cover),
                     title: Text('${depute[1]} ${depute[2]}'),
                     subtitle: Text('${depute[3]}, ${depute[4]}'),
                     trailing: Text(depute[8]),
@@ -80,13 +84,7 @@ class _DeputesPageState extends State<DeputesPage> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => DeputePage(
-                            deputeData: {
-                              'Nom': depute[1],
-                              'Prénom': depute[2],
-                              'Parti': depute[3],
-                              'Circonscription': depute[4],
-                              'Email': depute[8],
-                            },
+                            depute: depute,
                           ),
                         ),
                       );
@@ -100,23 +98,36 @@ class _DeputesPageState extends State<DeputesPage> {
 }
 
 class DeputePage extends StatelessWidget {
-  final Map<String, String> deputeData;
+  final List<dynamic> depute;
 
-  const DeputePage({super.key, required this.deputeData});
+  const DeputePage({super.key, required this.depute});
 
   @override
   Widget build(BuildContext context) {
+    String imageUrl =
+        'https://datan.fr/assets/imgs/deputes_webp/depute_${depute[0]}_webp.webp';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Informations du Député'),
+        title: Text('${depute[1]} ${depute[2]}'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: deputeData.entries.map((entry) {
-            return Text('${entry.key}: ${entry.value}');
-          }).toList(),
+          children: [
+            Center(
+              child: Image.network(imageUrl,
+                  width: 100, height: 100, fit: BoxFit.cover),
+            ),
+            const SizedBox(height: 16.0),
+            Text('Nom: ${depute[1]} ${depute[2]}',
+                style: TextStyle(fontSize: 18)),
+            Text('Région: ${depute[3]}', style: TextStyle(fontSize: 18)),
+            Text('Circonscription: ${depute[4]}',
+                style: TextStyle(fontSize: 18)),
+            Text('Groupe politique (abrégé): ${depute[8]}',
+                style: TextStyle(fontSize: 18)),
+          ],
         ),
       ),
     );
