@@ -14,13 +14,13 @@ class ScannerErrorWidget extends StatelessWidget {
       case MobileScannerErrorCode.controllerUninitialized:
         errorMessage = 'Controller not ready.';
       case MobileScannerErrorCode.permissionDenied:
-        errorMessage = 'Permission denied';
+        errorMessage = 'Permission refusé';
       case MobileScannerErrorCode.unsupported:
-        errorMessage = 'Scanning is unsupported on this device';
+        errorMessage = 'Le scanner n est pas supporté sur cet appareil';
       case MobileScannerErrorCode.vcard:
-        errorMessage = 'Scanned barcode is a non supported vCard';
+        errorMessage = 'Le code barre est une vCard non valide';
       default:
-        errorMessage = 'Generic Error';
+        errorMessage = 'Erreur inconnue';
     }
 
     return AlertDialog(

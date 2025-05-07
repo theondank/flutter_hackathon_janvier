@@ -1,44 +1,31 @@
-// Importation des packages nécessaires
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:csv/csv.dart';
-import 'package:flutter_hackathon/database_helpers.dart';
+import 'package:flutter_hackathon/mobile_scanner_overlay.dart';
+import 'package:flutter_hackathon/services/deputes_service.dart';
+import 'package:flutter_hackathon/modele/deputes.dart';
 
-// Instance du gestionnaire de base de données
-final dbHelper = DatabaseHelper();
-
-// Variable pour mettre en cache les données des députés
-List<Map<String, String>>? _cachedDeputesData;
-
-// Fonction pour charger les données des députés depuis un fichier CSV
-Future<List<Map<String, String>>> loadDeputesData() async {
-  // Si les données sont déjà en cache, les retourner directement
-  if (_cachedDeputesData != null) {
-    return _cachedDeputesData!;
-  }
-
-  try {
-    
-    final data = await rootBundle.loadString('assets/data_deputes.csv');
-    final List<List<dynamic>> csvTable = CsvToListConverter().convert(data);
-
+void testDeputeParsing() {
+  final testJson = {
+    "identifiant": "123",
+    "nom": "Test",
+    "prenom": "Jean",
+    "region": "TestRegion",
+    "departement": "TestDept",
+    "groupePolitiqueAbrege": "TEST",
+    "groupePolitiqueComplet": "Test complet",
+    "numeroCirconscription": "1",
+    "profession": "Testeur"
+  };
   
-    if (csvTable.isEmpty) return [];
-
-    // Extraction des en-têtes et des données
-    final headers = csvTable.first.map((header) => header.toString()).toList();
-    _cachedDeputesData = csvTable.skip(1).map((row) {
-      return Map<String, String>.fromIterables(headers, row.map((e) => e.toString()));
-    }).toList();
-
-    return _cachedDeputesData!;
+  try {
+    final depute = Depute.fromJson(testJson);
+    print('Parsing réussi: ${depute.NOM} ${depute.PRENOM}');
   } catch (e) {
-    
-    return [];
+    print('Échec du parsing: $e');
   }
 }
 
-// Classe principale pour afficher la liste des députés
+// Appelez cette fonction quelque part (dans initState par exemple)
+
 class DeputesPage extends StatefulWidget {
   const DeputesPage({super.key});
 
@@ -47,41 +34,48 @@ class DeputesPage extends StatefulWidget {
 }
 
 class _DeputesPageState extends State<DeputesPage> {
-  List<Map<String, String>> _deputes = []; // Liste complète des députés
-  List<Map<String, String>> _filteredDeputes = []; // Liste filtrée selon la recherche
-  TextEditingController _searchController = TextEditingController(); // Contrôleur pour le champ de recherche
+  List<Depute> _deputes = [];
+  List<Depute> _filteredDeputes = [];
+  bool _isLoading = true;
+  String? _errorMessage; // Nouveau: pour stocker les erreurs
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _loadDeputesData(); // Charger les données des députés
-    _searchController.addListener(_filterDeputes); // Écoute les modifications du champ de recherche
+    _loadDeputesData();
+    _searchController.addListener(_filterDeputes);
+    testDeputeParsing(); // Testez le parsing
   }
 
-  @override
-  void dispose() {
-    _searchController.removeListener(_filterDeputes);
-    super.dispose();
-  }
-
-  // Charger les données des députés 
-  Future<void> _loadDeputesData() async {
-    final deputies = await loadDeputesData();
-    setState(() {
-      _deputes = deputies;
-      _filteredDeputes = deputies;
-    });
-  }
-
-  // Filtre les députés en fonction de la saisie de l'utilisateur
   void _filterDeputes() {
     final query = _searchController.text.toLowerCase();
     setState(() {
       _filteredDeputes = _deputes.where((depute) {
-        final name = '${depute['Nom']} ${depute['Prénom']}'.toLowerCase();
-        return name.contains(query);
+        return depute.NOM.toLowerCase().contains(query) ||
+               depute.PRENOM.toLowerCase().contains(query) ||
+               depute.REGION.toLowerCase().contains(query) ||
+               depute.DEPARTEMENT.toLowerCase().contains(query);
       }).toList();
     });
+  }
+
+  Future<void> _loadDeputesData() async {
+    try {
+      final deputies = await DeputeService.fetchDeputes();
+      setState(() {
+        _deputes = deputies;
+        _filteredDeputes = deputies;
+        _isLoading = false;
+        _errorMessage = null;
+      });
+    } catch (e) {
+      print('Erreur capturée: $e');
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Impossible de charger les données: ${e.toString()}';
+      });
+    }
   }
 
   @override
@@ -106,113 +100,179 @@ class _DeputesPageState extends State<DeputesPage> {
           ),
         ),
       ),
-      body: _deputes.isEmpty
-          ? const Center(child: CircularProgressIndicator()) 
-          : ListView.builder(
-              itemCount: _filteredDeputes.length,
-              itemBuilder: (context, index) {
-                final depute = _filteredDeputes[index];
-                String imageUrl =
-                    'https://datan.fr/assets/imgs/deputes_webp/depute_${depute['identifiant']}_webp.webp';
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                      vertical: 8.0, horizontal: 16.0),
-                  child: ListTile(
-                    leading: Image.network(imageUrl,
-                        width: 50, height: 50, fit: BoxFit.cover),
-                    title: Text('${depute['Nom']} ${depute['Prénom']}'),
-                    subtitle: Text('${depute['Région']}, ${depute['Département']}'),
-                    trailing: Text(depute['Groupe politique (abrégé)'] ?? ''),
-                    onTap: () async {
-                      // Charge l'historique d'entrée pour le député et ouvre une page détaillée
-                      List<Map<String, dynamic>> entries = await 
-                      dbHelper.getEntriesForDepute('${depute['Nom']} ${depute['Prénom']}');
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => DeputePage(
-                            depute: depute,
-                            entries: entries,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              },
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_errorMessage!),
+            ElevatedButton(
+              onPressed: _loadDeputesData,
+              child: const Text('Réessayer'),
             ),
+          ],
+        ),
+      );
+    }
+    
+    if (_filteredDeputes.isEmpty) {
+      return const Center(child: Text('Aucun député trouvé'));
+    }
+    
+    return ListView.builder(
+      itemCount: _filteredDeputes.length,
+      itemBuilder: (context, index) {
+        final depute = _filteredDeputes[index];
+        return _buildDeputeCard(depute);
+      },
+    );
+  }
+
+  Widget _buildDeputeCard(Depute depute) {
+    final imageUrl = 'https://datan.fr/assets/imgs/deputes_webp/depute_${depute.IDENTIFIANT}_webp.webp';
+    
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundImage: NetworkImage(imageUrl),
+          onBackgroundImageError: (exception, stackTrace) {
+            print('Erreur de chargement image: $exception');
+          },
+          radius: 25,
+        ),
+        title: Text('${depute.PRENOM} ${depute.NOM}'),
+        subtitle: Text('${depute.REGION}, ${depute.DEPARTEMENT}'),
+        trailing: Container(
+          padding: const EdgeInsets.all(6.0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12.0),
+            color: Colors.grey.shade200,
+          ),
+          child: Text(
+            depute.GROUPE_POLITIQUE_ABREGE,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DeputePage(
+                depute: depute,
+                entries: [],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
 
-// Page détaillée pour un député spécifique
 class DeputePage extends StatelessWidget {
-  final Map<String, String> depute; // Informations sur le député
-  final List<Map<String, dynamic>> entries; // Historique des entrées du député
+  final Depute depute;
+  final List<dynamic> entries;
 
-  const DeputePage({super.key, required this.depute, required this.entries});
+  const DeputePage({
+    Key? key,
+    required this.depute,
+    required this.entries,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    String imageUrl =
-        'https://datan.fr/assets/imgs/deputes_webp/depute_${depute['identifiant']}_webp.webp';
+    final imageUrl =
+        'https://datan.fr/assets/imgs/deputes_webp/depute_${depute.IDENTIFIANT}_webp.webp';
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('${depute['Nom']} ${depute['Prénom']}'),
+        title: Text('${depute.PRENOM} ${depute.NOM}'),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
-              child: Image.network(imageUrl,
-                  width: 100, height: 100, fit: BoxFit.cover),
+              child: CircleAvatar(
+                backgroundImage: NetworkImage(imageUrl),
+                radius: 60,
+              ),
             ),
-            const SizedBox(height: 16.0),
-            Text('Nom: ${depute['Nom']} ${depute['Prénom']}',
-                style: const TextStyle(fontSize: 18)),
-            Text('Région: ${depute['Région']}', style: const TextStyle(fontSize: 18)),
-            Text('Circonscription: ${depute['Département']}',
-                style: const TextStyle(fontSize: 18)),
-            Text('Groupe politique (abrégé): ${depute['Groupe politique (abrégé)']}',
-                style: const TextStyle(fontSize: 18)),
-            const SizedBox(height: 16.0),
-            const Text(
-              'Historique des entrées dans l\'hémicycle:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            const SizedBox(height: 20),
+            Card(
+              elevation: 2.0,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${depute.PRENOM} ${depute.NOM}',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8.0),
+                    _infoRow('Groupe', depute.GROUPE_POLITIQUE_COMPLET),
+                    _infoRow('Région', depute.REGION),
+                    _infoRow('Département', depute.DEPARTEMENT),
+                    _infoRow('Circonscription', depute.NUMERO_CIRCONSCRIPTION),
+                    _infoRow('Profession', depute.PROFESSION),
+                  ],
+                ),
+              ),
             ),
-            Expanded(
-              child: ListView.builder(
+            if (entries.isNotEmpty) ...[
+              const SizedBox(height: 16.0),
+              Text(
+                'Historique',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
                 itemCount: entries.length,
                 itemBuilder: (context, index) {
-                  var entry = entries[index];
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Colors.blue,
-                        child: Text(
-                          entry['deputy_name'][0],
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ),
-                      title: Text(
-                        entry['deputy_name'],
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text(entry['entry_time']),
-                      trailing: const Icon(Icons.arrow_forward),
-                      onTap: () {
-                        
-                      },
-                    ),
+                  final entry = entries[index];
+                  return ListTile(
+                    title: Text(entry['title'] ?? ''),
+                    subtitle: Text(entry['date'] ?? ''),
                   );
                 },
               ),
-            ),
+            ]
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label :',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(
+            child: Text(value),
+          ),
+        ],
       ),
     );
   }
