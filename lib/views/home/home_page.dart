@@ -4,6 +4,7 @@ import 'package:flutter_hackathon/views/home/action_button.dart';
 import 'package:flutter_hackathon/deputes_page.dart';
 import 'package:flutter_hackathon/mobile_scanner_overlay.dart';
 import 'package:flutter_hackathon/app_bar.dart';
+import 'package:flutter_hackathon/deputes_list_page.dart';
 
 class MyHome extends StatelessWidget {
   const MyHome({super.key});
@@ -26,7 +27,7 @@ class MyHome extends StatelessWidget {
             ActionButton(
               label: "Consulter la liste des députés",
               icon: Icons.account_circle,
-              destination: DeputesPage(),
+              destination: DeputesListPage(), // Remplacer par une page de liste des députés
             ),
           ],
         ),

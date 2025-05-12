@@ -214,7 +214,7 @@ class ScannerOverlay extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final backgroundPath = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    final backgroundPath = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height)); 
 
     final cutoutPath = Path()
       ..addRRect(RRect.fromRectAndCorners(scanWindow, 
